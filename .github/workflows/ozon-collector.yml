@@ -1,0 +1,69 @@
+name: Lemon Ozon Image Collector
+
+on:
+  issues:
+    types: [opened, edited, reopened]
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  NODE_VERSION: "22"
+
+jobs:
+  collect:
+    if: startsWith(github.event.issue.title, 'OZON:')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Collect Ozon images
+        id: collect
+        continue-on-error: true
+        env:
+          BROWSERLESS_TOKEN: ${{ secrets.BROWSERLESS_TOKEN }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: npm run scrape
+
+      - name: Upload result package
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ozon-issue-${{ github.event.issue.number }}
+          path: result
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Reply to Issue
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let body = '## ❌ 没有生成抓取结果\n\n请检查本次 Actions 日志。';
+            if (fs.existsSync('result/comment.md')) {
+              body = fs.readFileSync('result/comment.md', 'utf8');
+            }
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body
+            });
+
+      - name: Mark job failed when collector failed
+        if: steps.collect.outcome == 'failure'
+        run: exit 1
