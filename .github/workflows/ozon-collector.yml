@@ -13,7 +13,7 @@ env:
 
 jobs:
   collect:
-    if: startsWith(github.event.issue.title, 'OZON:')
+    if: startsWith(github.event.issue.title, 'OZON:') || startsWith(github.event.issue.title, 'TASK:')
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
